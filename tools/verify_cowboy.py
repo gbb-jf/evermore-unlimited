@@ -8,12 +8,12 @@ from pathlib import Path
 
 from build_npc import build_rom
 from cowboy_graphics import FRAME_OFFSET, PALETTE_ID, load_art
-from libretro_session import Session
+from emulator_session import add_arguments, open_session
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--core", type=Path, default=Path("tools/vendor/snes9x_libretro.so"))
+    add_arguments(parser)
     parser.add_argument("--rom", type=Path, default=Path("build/evermore-npc.sfc"))
     parser.add_argument("--original", type=Path, default=Path("roms/original.sfc"))
     parser.add_argument("--output-dir", type=Path, default=Path("build/cowboy-facings"))
@@ -21,14 +21,13 @@ def main():
     if args.rom.read_bytes() != build_rom(args.original.read_bytes()):
         parser.error("Rebuild the current ROM before verification")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    session = Session(args.core, args.rom)
-    report = {"fresh_boot": True, "ram_writes": False, "events": [], "poses": [],
-              "rom_sha256": hashlib.sha256(args.rom.read_bytes()).hexdigest(),
-              "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest()}
+    session, report = open_session(args.rom, luna=args.luna, core=args.core)
+    report.update({"fresh_boot": True, "ram_writes": False, "events": [], "poses": [],
+                   "rom_sha256": hashlib.sha256(args.rom.read_bytes()).hexdigest()})
 
     def run(frames, *buttons):
         session.run(frames, *buttons)
-        report["events"].append({"frames": frames, "buttons": list(buttons)})
+        report["events"].append({"frames": frames, "buttons": list(buttons), "at_frame": session.frame})
 
     def check(condition, message):
         if not condition:
@@ -82,7 +81,8 @@ def main():
             check(session.word(npc + 8) == 0xF1, "Frame returned to shared graphics")
             screenshot = args.output_dir / f"cowboy-{facing}.png"
             session.screenshot(screenshot)
-            report["events"].append({"frames": 1, "buttons": [], "capture": screenshot.name})
+            report["events"].append({"frames": 1, "buttons": [], "capture": screenshot.name,
+                                     "at_frame": session.frame})
             report["poses"].append({"facing": facing, "file": screenshot.name,
                                      "sha256": hashlib.sha256(screenshot.read_bytes()).hexdigest()})
             for _ in range(64):

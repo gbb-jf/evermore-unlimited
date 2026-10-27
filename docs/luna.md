@@ -1,7 +1,8 @@
-# Luna emulator trial
+# Luna emulator
 
 [Luna](https://github.com/k0b3n4irb/luna) provides a headless CLI, a stdio MCP
-server, and a separate desktop application. The local trial uses version
+server, and a separate desktop application. Luna is the project emulator for
+verification, editor reference capture, and play. The pinned build uses version
 `1.41.0+6e2e3b2`, commit `6e2e3b27c015c61ab3591abb22a1968dd83c0567`.
 Source, binaries, and private evidence stay in ignored directories.
 
@@ -50,16 +51,23 @@ or `--input @path/to/script.input`. These change controller input only.
 ## Opening verification
 
 ```sh
-python3 tools/verify_npc.py --luna tools/vendor/luna/target/release/luna \
-  --output-dir build/luna/verification
+python3 tools/verify_cowboy.py
+python3 tools/verify_npc.py
+python3 tools/verify_editor.py
+python3 tools/capture_station.py
 ```
 
 `tools/luna_session.py` connects to the native stdio MCP server using Python's
-standard library. The opening recipe starts a fresh game, supplies controller
+standard library. `tools/emulator_session.py` selects Luna by default for all
+four commands. Pass `--luna PATH` to use another executable; `--core PATH` is
+reserved for explicitly requested libretro comparisons, with no automatic fallback.
+The opening recipe starts a fresh game, supplies controller
 input, and reads WRAM for assertions; it never loads save states or writes RAM.
 Requests are bounded to 300 frames and time out after 60 seconds. The report
 records the Luna version, executable/ROM hashes, actual frame counters, inputs,
-and screenshot hashes under `build/luna/verification/`.
+and screenshot hashes. Default output directories are `build/cowboy-facings/`,
+`build/verification/`, `build/editor-runtime/`, and `build/editor/` respectively.
+Use `--output-dir` on verification commands to keep separate runs.
 
 Verified on 2026-10-27: the complete recipe passed across 40,446 emulated
 frames. The cowboy appeared at `(544, 288)`, completed three conversations
@@ -72,14 +80,28 @@ The tested ROM SHA-256 is
 `75f10cd5dcdb6a78fa9c081eb0296951915654c7cd1bd3149c944201e9017317`.
 Evidence: `build/luna/verification/report.json` and the PNG files beside it.
 
-## Scope
+The default Luna paths also passed the four-direction cowboy/palette check,
+the two-character animation/patrol/dialogue check, and clean-ROM station
+reference capture. Reports are in `build/cowboy-facings/report.json`,
+`build/editor-runtime/report.json`, and `build/editor/station.json`.
 
-The directional graphics and editor verification scripts and editor reference
-capture still use the pinned Snes9x libretro core. Luna's native CLI/MCP
-interface is separate from libretro;
-its executable cannot be passed as `--core`. The editor's **Open Snes9x** button
-still launches Snes9x. A desktop Luna window requires the separate `luna-gui`
-package and a desktop display; this headless trial does not test that frontend.
+## Desktop play
+
+Build the separate GUI package from the same pinned checkout. Linux builds
+also require the ALSA and udev development packages (`libasound2-dev` and
+`libudev-dev` on Ubuntu):
+
+```sh
+cargo +stable build --manifest-path tools/vendor/luna/Cargo.toml \
+  --release --locked -p luna-gui
+tools/vendor/luna/target/release/luna-gui build/evermore-npc.sfc
+```
+
+The editor's **Open Luna** button checks the vendor build first, then `luna-gui`
+on PATH. A desktop display is required. The headless CLI does not supply a
+desktop window; the GUI has not been built or tested in this environment.
+
+## Scope
 
 Opening tests do not establish full-campaign, other-region, other-patch,
 old-save-state, or physical-hardware compatibility.

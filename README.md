@@ -32,10 +32,10 @@ editor launch command.
 - **Save & build ROM:** save source files and generate the patched ROM, BPS,
   manifest, and sprite sheets. Errors keep the editor usable.
 
-**Capture ROM reference** makes a private station background using the optional
-emulator below. Scene editing works without it. **Open Snes9x** launches an
-installed `snes9x` or `snes9x-gtk` from a desktop session; otherwise open the ROM
-manually. See [the editor guide](docs/character-editor.md) for controls and CLI use.
+**Capture ROM reference** makes a private station background using Luna, our
+project emulator. Scene editing works without it. **Open Luna** launches
+`luna-gui` from the local vendor build or PATH in a desktop session. See
+[Luna setup](docs/luna.md) and [the editor guide](docs/character-editor.md).
 
 ## Build and play
 
@@ -96,12 +96,12 @@ Browser tests use isolated copies under `build/browser-tests/` and never change
 your character/scene files. Reports/screenshots go to `build/editor-browser-report.json`
 and `build/editor-*-browser.png`. Set `CHROMIUM_PATH` to use existing Chromium.
 
-Optional fresh-boot emulator checks:
+Fresh-boot emulator checks use Luna by default:
 
 ```sh
-python3 tools/verify_cowboy.py --core tools/vendor/snes9x_libretro.so
-python3 tools/verify_npc.py --core tools/vendor/snes9x_libretro.so
-python3 tools/verify_editor.py --core tools/vendor/snes9x_libretro.so
+python3 tools/verify_cowboy.py
+python3 tools/verify_npc.py
+python3 tools/verify_editor.py
 ```
 
 The first two check the default scene: four talk facings, private palette,
@@ -115,23 +115,19 @@ Evidence goes to `build/cowboy-facings/`, `build/verification/`, and
 `build/editor-runtime/`. Integrity tests independently decode tiles/BPS, check
 determinism/checksums, and preserve unrelated original ROM data.
 
-Luna is available as an alternative headless backend for the opening check:
+Build the pinned Luna CLI (Git and Rust/Cargo required):
 
 ```sh
-python3 tools/verify_npc.py --luna tools/vendor/luna/target/release/luna \
-  --output-dir build/luna/verification
+git clone https://github.com/k0b3n4irb/luna.git tools/vendor/luna
+git -C tools/vendor/luna checkout 6e2e3b27c015c61ab3591abb22a1968dd83c0567
+cargo +stable build --manifest-path tools/vendor/luna/Cargo.toml \
+  --release --locked -p luna-cli
 ```
 
-See [the Luna trial](docs/luna.md) for its pinned build and interface details.
-
-Build the pinned optional emulator (C/C++ compiler and Make required):
-
-```sh
-git clone https://github.com/libretro/snes9x.git tools/vendor/snes9x
-git -C tools/vendor/snes9x checkout fae2fea08f74180759ef540ee94259213f503480
-make -C tools/vendor/snes9x/libretro -j4
-python3 tools/verify_editor.py --core tools/vendor/snes9x/libretro/snes9x_libretro.so
-```
+See [Luna setup](docs/luna.md) for desktop builds, interfaces, and evidence.
+All checks and reference capture accept `--luna PATH` for another Luna executable.
+`--core PATH` explicitly selects a libretro core for comparison; it is never an
+automatic fallback.
 
 Current scope: the opening station, eight instances using at most two distinct
 custom characters, stationary or waypoint movement. Routes do not add collision

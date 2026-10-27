@@ -330,7 +330,7 @@ async function startJob(job) {
       if (result.running) continue;
       if (result.status !== 'passed') throw new Error(result.error || 'Operation failed');
       await refresh();
-      notice(job === 'build' ? 'ROM built. Open build/evermore-npc.sfc in Snes9x and start a fresh game.' : 'Station reference captured.');
+      notice(job === 'build' ? 'ROM built. Open build/evermore-npc.sfc in Luna and start a fresh game.' : 'Station reference captured.');
       break;
     }
   } finally {
@@ -338,7 +338,7 @@ async function startJob(job) {
   }
 }
 $('build').onclick = action(() => startJob('build')); $('capture').onclick = action(() => startJob('capture'));
-$('play').onclick = action(async () => {await request('/api/play', {}); notice('Opened the built ROM in Snes9x. Start a fresh game.');});
+$('play').onclick = action(async () => {await request('/api/play', {}); notice('Opened the built ROM in Luna. Start a fresh game.');});
 $('help').onclick = () => $('help-dialog').showModal(); $('help-close').onclick = () => $('help-dialog').close();
 function download(data, name, type) {
   const url = URL.createObjectURL(new Blob([data], {type})), link = document.createElement('a');

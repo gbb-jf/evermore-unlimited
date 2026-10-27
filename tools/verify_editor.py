@@ -3,7 +3,6 @@
 
 import argparse
 from copy import deepcopy
-import hashlib
 import json
 from pathlib import Path
 import sys
@@ -11,12 +10,12 @@ import tempfile
 
 from build_npc import build_project
 from character_model import ROOT, Store, canonical, rgb_palette
-from libretro_session import Session
+from emulator_session import add_arguments, open_session
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--core", type=Path, default=ROOT / "tools/vendor/snes9x_libretro.so")
+    add_arguments(parser)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "build/editor-runtime")
     args = parser.parse_args()
     output = args.output_dir.resolve()
@@ -41,19 +40,19 @@ def main():
     store.save("scenes", scene, None)
     manifest = build_project(fixture, source_path=ROOT / "roms/original.sfc")
     rom = fixture / "build/evermore-npc.sfc"
-    session = Session(args.core, rom)
-    report = {"fresh_boot": True, "ram_writes": False, "fixture": str(fixture),
-              "rom_sha256": manifest["target"]["sha256"], "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest(),
-              "events": [], "checks": [], "screenshots": []}
+    session, report = open_session(rom, luna=args.luna, core=args.core)
+    report.update({"fresh_boot": True, "ram_writes": False, "fixture": str(fixture),
+                   "rom_sha256": manifest["target"]["sha256"],
+                   "events": [], "checks": [], "screenshots": []})
 
     def run(frames, *buttons):
         session.run(frames, *buttons)
-        report["events"].append({"frames": frames, "buttons": list(buttons)})
+        report["events"].append({"frames": frames, "buttons": list(buttons), "at_frame": session.frame})
 
     def screenshot(name):
         path = output / f"{name}.png"
         session.screenshot(path)
-        report["events"].append({"frames": 1, "buttons": [], "capture": path.name})
+        report["events"].append({"frames": 1, "buttons": [], "capture": path.name, "at_frame": session.frame})
         report["screenshots"].append(path.name)
 
     def check(condition, message):

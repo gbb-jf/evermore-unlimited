@@ -60,9 +60,11 @@ or avoidance; playtest new arrangements from a fresh game.
 **Save & build ROM** saves documents, then runs the CLI compiler. Jobs serialize
 build/capture operations and release controls on failure. You can edit while a job
 runs; later unsaved edits need another save/build. The manifest records the actual
-document revisions compiled. **Capture ROM reference** boots the original ROM and
-writes its station viewport/origin to ignored `build/editor/`; without the core,
-the scene editor still displays its placement grid.
+document revisions compiled. **Capture ROM reference** boots the original ROM
+with Luna and writes its station viewport/origin to ignored `build/editor/`;
+without Luna, the scene editor still displays its placement grid. **Open Luna**
+launches the separate `luna-gui` desktop app from the vendor build or PATH.
+See [Luna setup](luna.md) for CLI and desktop build instructions.
 
 ## Agent/CLI workflow
 
@@ -107,5 +109,5 @@ Browser tests use isolated copies; runtime tests build a separate two-character
 fixture under `build/editor-runtime/`. They do not add characters to the user's
 default scene. Acceptance checks start fresh and use real inputs; read-only RAM
 assertions inspect bindings, palettes, frames, patrols, and original progression.
-Reports contain current ROM/core hashes and input logs. They do not establish
+Reports contain current ROM and emulator executable hashes and input logs. They do not establish
 full-campaign, arbitrary-scene, other-patch/region, hardware, or old-state compatibility.

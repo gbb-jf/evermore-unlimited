@@ -18,6 +18,7 @@ through the robot fight and descent to Prehistoria.
 - `docs/opening-npc.md`: script hooks, actor behavior, and original allocations.
 - `docs/cowboy-graphics.md`: graphics formats, native hooks, and added allocations.
 - `docs/character-editor.md`: editor, shared documents, CLI, and current limits.
+- `docs/luna.md`: pinned Luna emulator build, interfaces, and verification evidence.
 
 ## Source and generated files
 
@@ -32,8 +33,11 @@ through the robot fight and descent to Prehistoria.
 - `assets/scenes/opening-station.json` contains instances, dialogue and patrols.
 - `tools/characters.py` and `tools/editor_server.py` expose the shared validated
   documents through the CLI and local visual editor. Preserve revision checks.
-- `tools/libretro_session.py` supplies headless emulator input, observations,
-  screenshots, and research save states. The verification scripts use it.
+- Use Luna as the project emulator. `tools/luna_session.py` supplies headless
+  controller input, read-only observations, and screenshots through native MCP.
+  `tools/emulator_session.py` selects Luna by default for verification and capture.
+  `tools/libretro_session.py` remains available for explicitly requested comparisons
+  and historical research save states; do not select it automatically.
 - `tests/test_build_npc.py` checks patch integrity and graphics encoding.
 
 Keep `roms/`, `build/`, `tools/vendor/`, extracted original assets, emulator
@@ -76,15 +80,15 @@ technical documentation. Generated PNG previews are outputs, not artwork inputs.
 ## Build and verification
 
 Run commands from the project root. Python 3.10+ and Pillow are required for the
-build and previews. The optional emulator checks require a separately supplied
-Snes9x libretro core; the pinned source version is documented in `README.md`.
+build and previews. Emulator checks use the pinned Luna CLI at
+`tools/vendor/luna/target/release/luna`; build instructions are in `docs/luna.md`.
 
 ```sh
 python3 tools/build_npc.py
 python3 -m unittest discover -s tests -v
-python3 tools/verify_cowboy.py --core tools/vendor/snes9x_libretro.so
-python3 tools/verify_npc.py --core tools/vendor/snes9x_libretro.so
-python3 tools/verify_editor.py --core tools/vendor/snes9x_libretro.so
+python3 tools/verify_cowboy.py
+python3 tools/verify_npc.py
+python3 tools/verify_editor.py
 npm run test:editor
 npm run test:browser
 ```

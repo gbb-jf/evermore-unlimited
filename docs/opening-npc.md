@@ -82,10 +82,12 @@ is `399fedd132d277f22cb28d527fa6bc3d230607c96f54fcc02ddabdd96f94bd8d`;
 the corresponding BPS is 208 bytes.
 
 `tools/verify_npc.py` runs from a fresh boot and writes a JSON report containing
-the core version/hash, ROM hash, frame-by-frame input segments, and screenshot
+the emulator version/hash, ROM hash, frame-by-frame input segments, and screenshot
 hashes. It never changes game RAM or bypasses progression. Screenshots show the
 NPC in the station, three repeated conversations, the original robot encounter,
 arrival in Prehistoria, and resumed play with the dog.
+
+Luna is now the default emulator; see [Luna setup and evidence](luna.md).
 
 The verification recipe reads vanilla USA WRAM locations for actor position,
 talk-script attachment, robot encounter pointers, robot kill count, opening state,

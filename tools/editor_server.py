@@ -16,6 +16,7 @@ from urllib.parse import urlparse, parse_qs
 import webbrowser
 
 from character_model import ROOT, Store, Conflict, Invalid, MAX_INSTANCES, MAX_PALETTES, blank_character, export_sheet, import_sheet, validate
+from emulator_session import DEFAULT_LUNA
 
 
 def serve(root=ROOT, port=8765, open_browser=True):
@@ -38,8 +39,9 @@ def serve(root=ROOT, port=8765, open_browser=True):
                     command = [sys.executable, str(ROOT / "tools/characters.py"), "--root", str(root), "--json", "build"]
                 else:
                     command = [sys.executable, str(ROOT / "tools/capture_station.py"), "--root", str(root),
-                               "--core", str(ROOT / "tools/vendor/snes9x_libretro.so")]
-                result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=180)
+                               "--luna", str(DEFAULT_LUNA)]
+                result = subprocess.run(command, cwd=root, capture_output=True, text=True,
+                                        timeout=600 if action == "capture" else 180)
                 with state_lock:
                     state.update(running=False, status="passed" if result.returncode == 0 else "failed",
                                  output=result.stdout, error=result.stderr or (result.stdout if result.returncode else None))
@@ -155,12 +157,13 @@ def serve(root=ROOT, port=8765, open_browser=True):
             elif path in ("/api/build", "/api/capture"):
                 self.send(job("build" if path.endswith("build") else "capture"), 202)
             elif path == "/api/play":
-                executable = shutil.which("snes9x") or shutil.which("snes9x-gtk")
+                local_gui = DEFAULT_LUNA.with_name("luna-gui")
+                executable = str(local_gui) if local_gui.is_file() else shutil.which("luna-gui")
                 rom = root / "build/evermore-npc.sfc"
                 if not executable or not rom.is_file():
-                    raise ValueError("Build the ROM and install Snes9x first")
+                    raise ValueError("Build the ROM and install Luna's desktop app (luna-gui) first. See docs/luna.md.")
                 if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-                    raise ValueError(f"This server has no desktop display. Open {rom} in Snes9x, or start the editor from a desktop terminal.")
+                    raise ValueError(f"This server has no desktop display. Open {rom} in Luna, or start the editor from a desktop terminal.")
                 subprocess.Popen([executable, str(rom)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
                 self.send({"launched": True})
             else:

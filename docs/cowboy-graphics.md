@@ -101,10 +101,10 @@ original graphics preservation, disjoint allocations, supported-input rejection,
 deterministic output, and compilation of the full eight-instance/two-character
 budget. Browser tests cover source editing and a real two-NPC build.
 
-Fresh-boot Snes9x checks verify four cowboy facings, separate palette buffers, the
+Fresh-boot checks use Luna by default to verify four cowboy facings, separate palette buffers, the
 original professor, repeated conversations and progression through Prehistoria.
 `verify_editor.py` builds an isolated two-character fixture and checks native walking
-frames, east/west patrols, and dialogue pause/resume. Inputs and ROM/core hashes are
+frames, east/west patrols, and dialogue pause/resume. Inputs and ROM/emulator hashes are
 recorded in the generated reports. Screenshots are inspected natively and at 4×
 nearest-neighbor scale. See `README.md` for commands and evidence directories.
 
