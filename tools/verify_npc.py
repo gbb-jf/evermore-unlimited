@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Reproduce the NPC and opening escape using controller input from a fresh boot."""
+
+import argparse
+import ctypes as C
+import hashlib
+import json
+from pathlib import Path
+
+from build_npc import build_rom
+from libretro_session import Session
+
+
+class SystemInfo(C.Structure):
+    _fields_ = [("library_name", C.c_char_p), ("library_version", C.c_char_p),
+                ("valid_extensions", C.c_char_p), ("need_fullpath", C.c_bool),
+                ("block_extract", C.c_bool)]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--core", type=Path, default=Path("tools/vendor/snes9x_libretro.so"))
+    parser.add_argument("--rom", type=Path, default=Path("build/evermore-npc.sfc"))
+    parser.add_argument("--original", type=Path, default=Path("roms/original.sfc"))
+    parser.add_argument("--output-dir", type=Path, default=Path("build/verification"))
+    args = parser.parse_args()
+    if args.rom.read_bytes() != build_rom(args.original.read_bytes()):
+        parser.error("Patched ROM differs from the current build; rebuild before verification")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    session = Session(args.core, args.rom)
+    info = SystemInfo()
+    session.core.retro_get_system_info.argtypes = [C.POINTER(SystemInfo)]
+    session.core.retro_get_system_info(C.byref(info))
+    report = {"emulator": info.library_name.decode(), "version": info.library_version.decode(),
+              "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest(),
+              "rom_sha256": hashlib.sha256(args.rom.read_bytes()).hexdigest(),
+              "fresh_boot": True, "ram_writes": False, "events": [], "screenshots": []}
+
+    def run(frames, *buttons):
+        session.run(frames, *buttons)
+        report["events"].append({"frames": frames, "buttons": list(buttons)})
+
+    def screenshot(name):
+        path = args.output_dir / (name + ".png")
+        session.screenshot(path)
+        report["events"].append({"frames": 1, "buttons": [], "capture": path.name})
+        report["screenshots"].append({"file": path.name,
+                                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+
+    def check(condition, message):
+        if not condition:
+            screenshot("failure")
+            raise RuntimeError(message)
+
+    try:
+        # Start a new game; enter one placeholder name using the normal naming UI.
+        run(1500)
+        run(1, "Start")
+        run(240)
+        run(1, "Start")
+        run(120)
+        for button in ("Up", "B", "Start", "B"):
+            run(1, button)
+            run(15)
+        run(18000)
+        npc = session.word(0x0341)
+        check(session.word(npc + 0x66) == 0x19AA, "Opening NPC talk script not attached")
+        check((session.word(npc + 0x1A), session.word(npc + 0x1C)) == (544, 288),
+              "Opening NPC was not stationary at its expected location")
+        check(session.ram[0x22EC] & 0x20, "Not in the opening station sequence")
+        screenshot("01-station-npc")
+        print("Fresh boot: opening NPC present", flush=True)
+
+        run(32, "Right")
+        run(9, "Down")
+        for i in range(3):
+            run(1, "B")
+            run(150)
+            screenshot(f"02-dialogue-{i + 1}")
+            run(1, "B")
+            run(60)
+            check((session.word(npc + 0x1A), session.word(npc + 0x1C)) == (544, 288),
+                  "NPC wandered after talking")
+        print("Three repeat conversations completed; NPC remains stationary", flush=True)
+
+        # Walk to the original Bazooka chest and trigger the ordinary robot fight.
+        run(9, "Up")
+        run(65, "Up")
+        run(1, "B")
+        run(1200)
+        screenshot("03-original-robot-encounter")
+        check(session.word(0x2861) != 0 and session.word(0x2863) != 0,
+              "Original robot encounter did not initialize")
+        run(1, "Down")
+        run(60)
+        for _ in range(24):
+            run(1, "B")
+            run(70)
+        check(session.word(0x2865) == 1, "First robot did not die as expected")
+        run(120, "Down")
+        run(10, "B")
+        run(90)
+        check(session.word(0x2865) == 2, "Second robot did not trigger the escape cutscene")
+        run(8910)
+        check(not (session.ram[0x22EC] & 0x20), "Opening sequence did not finish")
+        check((session.word(0x4EA3), session.word(0x4EA5)) == (536, 1080),
+              "Did not reach the original landing in Prehistoria")
+        screenshot("04-prehistoria-arrival")
+        # Advance the original multi-page landing / dog reunion / bone sequence.
+        for _ in range(24):
+            run(5, "B")
+            run(300)
+        before = (session.word(0x4EA3), session.word(0x4EA5))
+        run(12, "Right")
+        after = (session.word(0x4EA3), session.word(0x4EA5))
+        check(before != after, "Player control not restored in Prehistoria")
+        check(not (session.ram[0x2261] & 1), "Dog remained unavailable after landing")
+        screenshot("05-prehistoria-playable")
+        print("Original robot fight, escape, landing and player control passed", flush=True)
+        report["status"] = "passed"
+    except Exception as error:
+        report["status"] = "failed"
+        report["error"] = str(error)
+        raise
+    finally:
+        report["total_frames"] = session.frame
+        (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+        session.close()
+
+
+if __name__ == "__main__":
+    main()
