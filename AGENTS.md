@@ -17,16 +17,21 @@ through the robot fight and descent to Prehistoria.
 - `README.md`: setup, build, play, and verification commands.
 - `docs/opening-npc.md`: script hooks, actor behavior, and original allocations.
 - `docs/cowboy-graphics.md`: graphics formats, native hooks, and added allocations.
+- `docs/character-editor.md`: editor, shared documents, CLI, and current limits.
 
 ## Source and generated files
 
 - `tools/build_npc.py` validates the original ROM and builds the modified ROM,
   BPS patch, checksum, manifest, and artwork previews.
-- `tools/cowboy_graphics.py` compiles indexed art into native graphics and installs
-  the scoped animation, palette, and tile-pointer hooks.
-- `assets/cowboy.json` is the editable artwork source: four 32×32 frames, a
-  16-color palette, `.` for transparency, and hexadecimal palette indices `1`–`f`.
+- `tools/character_rom.py` compiles versioned characters/scenes and installs scoped
+  animation, patrol, palette, tile-pointer, and dialogue hooks.
+- `tools/cowboy_graphics.py` retains compatibility helpers for the original art checks.
+- `assets/characters/cowboy.json` is the editable artwork source: 32×32 idle/walk
+  frames, a 16-color palette, `.` for transparency, and hexadecimal indices `1`–`f`.
   Facing order is north/east/south/west; the feet anchor is `(16, 32)`.
+- `assets/scenes/opening-station.json` contains instances, dialogue and patrols.
+- `tools/characters.py` and `tools/editor_server.py` expose the shared validated
+  documents through the CLI and local visual editor. Preserve revision checks.
 - `tools/libretro_session.py` supplies headless emulator input, observations,
   screenshots, and research save states. The verification scripts use it.
 - `tests/test_build_npc.py` checks patch integrity and graphics encoding.
@@ -79,6 +84,9 @@ python3 tools/build_npc.py
 python3 -m unittest discover -s tests -v
 python3 tools/verify_cowboy.py --core tools/vendor/snes9x_libretro.so
 python3 tools/verify_npc.py --core tools/vendor/snes9x_libretro.so
+python3 tools/verify_editor.py --core tools/vendor/snes9x_libretro.so
+npm run test:editor
+npm run test:browser
 ```
 
 - For ROM, script, native-hook, or graphics changes, rebuild and run the relevant

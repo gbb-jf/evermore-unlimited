@@ -1,8 +1,9 @@
 # Opening-station NPC experiment
 
-The current v2 adds [independent cowboy graphics](cowboy-graphics.md). The script
-and text allocations below remain in use; the graphics notes list the added
-allocations, native hooks, and current verification results.
+The current v3 adds the [character workshop](character-editor.md) and a
+[data-driven graphics/scene compiler](cowboy-graphics.md). The default scene
+remains the stationary cowboy. This page records the original hook and script
+flow; the compiler notes list all current allocations and native hooks.
 
 ## Supported ROM and allocation
 
@@ -17,10 +18,11 @@ in the game's terminology add `$800000`; native HiROM addresses add `$C00000`.
 | --- | --- |
 | `$1BC446` | Replace the four-byte clear of `$22EA` bit 3 with a script CALL. |
 | `$129C3E` | Short-script pointer `$19AA`, redirected to the new conversation. |
-| `$11D006` | Debug text pointer `$0006`, redirected to our uncompressed text. |
-| `$300000` | New dialogue text in the expanded ROM. |
+| `$300000` | New per-instance dialogue text in the expanded ROM. |
 | `$308000` | NPC creation script, including the displaced flag-clear instruction. |
-| `$308040` | Conversation script. |
+| `$308400` | Conversation dispatcher using the speaking actor's profile. |
+| `$308800 + index*$400` | Per-instance conversation scripts. |
+| `$350000` | Relocated text-pointer table, custom entries from `$0006`. |
 | `$00FFDC` | Recomputed SNES checksum and complement. |
 
 The original header's ROM-size field is already `$0C` (4 MiB); expansion fills
@@ -34,7 +36,7 @@ character is created for this opening sequence, not later station visits.
 ## Actor and conversation
 
 - Map `$46`: professor's laboratory and ship area, also used by the opening.
-- Existing actor template `$57`, with private cowboy graphics in v2; spawn coordinates `(68, 36)` in eight-pixel units,
+- Existing actor template `$57`, with private character graphics; default spawn coordinates `(68, 36)` in eight-pixel units,
   resulting in world position `(544, 288)`.
 - The actor is additional; existing characters and map objects are retained.
 - Creation disables ordinary wandering, faces the actor south, and assigns the
@@ -42,15 +44,16 @@ character is created for this opening sequence, not later station visits.
 - The talk script uses the existing NPC interaction helpers `$32`/`$33`, message
   window helper `$02`, and a text string with a line break and wait-for-input.
 - The normal end-of-conversation helper re-enables the actor's AI, so the script
-  explicitly freezes the NPC again after cleanup and restores its idle facing.
+  explicitly freezes it again after cleanup. Stationary actors restore their
+  configured facing; patrols resume the retained route state.
 - No inventory, quest, save-format, balance, or progression changes are added.
 
 The script dumper's complete static discovery reports `$19AA` as the sole unused
-short/NPC/map script entry. Its original destination is retained elsewhere in the
-ROM; only this pointer is repurposed. Static discovery cannot rule out every
-possible indirect reference in the whole engine. This slot and the debug text
-slot are prototype allocations, not a general allocator or a compatibility promise
-for other hacks.
+short/NPC/map script entry. Only its pointer is repurposed. Static discovery cannot
+rule out every indirect reference. In v3, the original text-pointer table is left
+intact: the compiler copies it into expanded space and changes custom entries in
+that copy. The reader's bank/base operands select the copy. These allocations
+are not a compatibility promise for other hacks.
 
 ## References inspected
 

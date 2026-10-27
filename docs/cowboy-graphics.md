@@ -1,94 +1,115 @@
-# Independent cowboy graphics (v2)
+# Character graphics and scene compiler (v3)
 
-The opening NPC keeps template `$57` for its existing actor behavior, but its
-graphics are now independent. Template `$57` maps to actor definition `$C252`
-in bank `$8E` (character index `$29`, the professor); template and character
-indices are different tables. No professor definition, original frame, tile,
-animation pointer, or palette is overwritten.
+The original v2 cowboy experiment now uses the character/scene compiler in
+`tools/character_rom.py`. Original artwork lives in `assets/characters/`; instances
+and dialogue live in `assets/scenes/`. `tools/cowboy_graphics.py` retains legacy
+art-check helpers. This compiler adds no larger story or gameplay design.
 
-## Native behavior
+## Actor and native graphics formats
 
-`tools/cowboy_graphics.py` compiles original indexed artwork from
-`assets/cowboy.json` to SNES 4bpp tiles. Each facing has four 16×16 chunks in a
-32×32 canvas. The descriptors retain the original per-facing bounding rectangles
-so the padded art canvas does not change the actor's interaction geometry.
+Custom actors reuse template `$57` for ordinary interaction geometry. This template
+maps to definition `$C252` in bank `$8E` (character index `$29`, the professor).
+Template IDs, definition indices, animation origins, frame pointers and block IDs
+are separate identifiers. Original professor definitions/graphics remain intact.
 
-The initializer attaches talk script `$19AA` before setting the actor's facing.
-The animation hook recognizes exactly that talk script, talk type `$0040`, and
-actor definition `$C252`. Only this actor receives a private idle sequence and
-frame references in bank `$F1`. Native direction values select north, east,
-south, or west. Other actors execute the displaced table lookup and resume the
-original animation routine. The cowboy remains stationary and still turns to
-face the player during conversations.
+Each authored frame is a 32×32 indexed canvas with feet anchor `(16,32)`, compiled
+as four 16×16 blocks of SNES 4bpp tiles. The frame descriptor copies the original
+per-facing bounds, preserving interaction geometry. A private clip starts with a
+frame count, then three-byte entries: 16-bit descriptor offset in `$F1`, duration.
+Idle/walk clips for N/E/S/W occupy eight 256-byte slots per instance.
 
-The normal palette allocator assigns a separate slot using identifier `$FF00`.
-Two palette hooks load those colors from `$F4FF00` into the normal palette buffer
-and select bank `$F4` for uploads of that palette. Other identifiers retain their
-original palette source bank `$90`. The relocated vanilla prologue explicitly
-loads bank `$90`; copying its original PHK instruction would select `$F4` and
-produce incorrect colors for unrelated actors.
+Actor animation origin (`+03`) combines instance profile `$8000 + index*$1000`,
+direction (`$000/$100/$200/$300`), and walking (`$400`). The initializer assigns
+the private animation bank before setting the first facing. Native animation
+selection and tick hooks recognize talk script `$19AA`, talk type `$0040`,
+definition `$C252`, and animation bank `$F1`. Other actors resume displaced code.
 
-The 16×16 tile-pointer bank is copied intact from `$EC0000` to `$F20000` and the
-three native decoder reads are redirected to that copy. Only private block IDs
-`$1800`–`$180F` differ in the copy; all other pointer entries are byte-identical.
-New block pointers retain the engine's format relative to `$D90000`, with the
-compression bit clear. There is no emulator-specific graphics overlay.
+The custom tick changes frames by authored durations and moves patrols one pixel
+per tick. Actor word `+0E` retains waypoint index (bits 0–6), pause count (bits
+7–13), walking (bit 14), and conversation suspension (bit 15). Patrols move X then
+Y, loop authored waypoints, and hold their pause/state while talking. Stationary
+actors still turn through the original interaction helpers.
 
-## Allocations and hooks
+Hooks enter with native 16-bit A/X, DB `$7E`, Y pointing to the actor. Custom paths
+save registers and VM direct-page scratch `$00–$5F` around helper calls. Vanilla
+fallbacks restore flags before displaced instructions; the tick fallback retains
+the original TYX/INC behavior. Native palette allocation's current-actor pointer
+is preserved around custom palette selection.
 
-All addresses here are unheadered ROM **file offsets**; add `$C00000` for native
-HiROM addresses. These graphics allocations are separate from the v1 text and
-scripts.
+Each distinct character receives a private 32-byte palette, `$FF00` or `$FF20`.
+The normal allocator gives it a dynamic slot; load/upload hooks select bank `$F4`
+for these palette ranges, retaining original bank `$90` otherwise. The relocated
+vanilla prologue explicitly selects `$90`: copying PHK there would select `$F4`
+and corrupt unrelated colors.
 
-| Offset | Purpose |
+The tile-pointer bank is copied intact from `$EC0000` to `$F20000`. Three decoder
+operands select the copy. Only private block IDs starting at `$1800` differ; all
+other entries remain identical. New uncompressed pointers are relative to `$D90000`.
+There is no emulator overlay.
+
+## Allocations
+
+These are **unheadered file offsets**. Native HiROM addresses add `$C00000`;
+script listings use the separate `$800000` convention and packed addresses.
+Actual occupied intervals are listed in every generated manifest.
+
+| File offset / region | Contents |
 | --- | --- |
-| `$310000` | Four private frame descriptors (26 bytes each). |
-| `$318000` | Private native idle sequence. |
-| `$320000` | Relocated 64 KiB tile-pointer bank. |
-| `$330000` | Sixteen uncompressed 16×16 SNES 4bpp blocks. |
-| `$340000` | Conditional animation initializer. |
-| `$340100` | Conditional palette-buffer loader. |
-| `$340200` | Direction-to-frame lookup. |
-| `$340220` | Conditional palette-upload source bank. |
-| `$34FF00` | Private 16-color palette (32 bytes). |
-| `$108124` | Four-byte animation lookup replaced by JML. |
-| `$10CF3A` | Four-byte palette-loader prologue replaced by JML. |
-| `$10CFD2` | Palette-upload bank setup replaced by JSL/NOP. |
-| `$009745`, `$009754`, `$00A2E9` | Tile-pointer bank operands changed to `$F2`. |
+| `$300000–$307FFF` | Speaker-prefixed dialogue, native line/page controls. |
+| `$308000` | Spawn script, displaced flag-clear, all actor initializers. |
+| `$308400` | Talk dispatcher keyed by profile, shared script ID `$19AA`. |
+| `$308800 + instance*$400` | Per-instance conversation and patrol suspension. |
+| `$310000–$317FFF` | Private directional frame descriptors. |
+| `$318000–$31FFFF` | Eight instance clip sets (idle/walk, four directions). |
+| `$320000–$32FFFF` | Relocated 64 KiB tile-pointer bank. |
+| `$340000` | Conditional animation selection. |
+| `$340400` | Conditional custom actor tick. |
+| `$340800` | Private frame/duration loader. |
+| `$340A00` | Patrol movement helper. |
+| `$341400`, `$341500` | Palette load and upload-bank helpers. |
+| `$342000`, `$342100` | Instance profiles and facing lookup. |
+| `$343000` | Waypoint coordinates and encoded pauses. |
+| `$34FF00`, `$34FF20` | Private 16-color palettes. |
+| `$350000–$35FFFF` | Relocated text-pointer table. |
+| `$360000` onward | Private uncompressed 4bpp blocks. |
 
-The native hooks target the verified US ROM and native 16-bit A/X entry
-conventions. Conditional fallbacks preserve processor flags before executing
-displaced instructions. Both palette loading and native VRAM upload use the
-same private color source. The builder checks hook bytes, verifies new allocation
-space, and recomputes the ROM checksum and BPS CRCs.
+The text table copies original `$11D000–$12CFFF`, then changes only each custom
+instance's text entry (`$0006 + index*3`). Original entries remain untouched in
+the original ROM; the normal text reader's base/bank operands select `$F50000`.
+Script/text packing helpers enforce upper/lower half-bank address requirements.
+
+| Original file offset | Hook |
+| --- | --- |
+| `$1BC446` | Four-byte script CALL to initializer. |
+| `$129C3E` | Unused short-script `$19AA` pointer to talk dispatcher. |
+| `$108124` | Animation lookup replaced by JML. |
+| `$1080D2` | Animation tick prologue replaced by JML. |
+| `$10CF3A` | Palette loader prologue replaced by JML. |
+| `$10CFD2` | Palette upload bank replaced by JSL/NOP. |
+| `$009745`, `$009754`, `$00A2E9` | Tile-pointer bank operands to `$F2`. |
+| `$0CCCF8`, `$0CCCFD` | Text pointer bank/base operands to `$F5:$0000`. |
+| `$00FFDC` | Checksum/complement recomputed after compilation. |
+
+Every hook checks expected original bytes. Each new occupied interval must contain
+`$FF`, remain inside expanded ROM, and not overlap another allocation. The source
+hash is checked first; checksums/BPS CRCs and deterministic manifests are maintained.
 
 ## Verification
 
-Verified on 2026-10-27 using the existing Snes9x libretro core:
+The v3 checks cover independent tile decoding, exact BPS reconstruction, unrelated
+original graphics preservation, disjoint allocations, supported-input rejection,
+deterministic output, and compilation of the full eight-instance/two-character
+budget. Browser tests cover source editing and a real two-NPC build.
 
-- All 17 unit tests passed, including independent decoding of authored tile
-  pixels, original-art preservation, pointer-bank identity, BPS reconstruction,
-  supported-input validation, and deterministic builds.
-- `verify_cowboy.py` passed from a fresh boot over 20,974 frames. It checked all
-  four conversation facings, the private palette buffer, station position, and
-  the original professor's actor definition, animation bank and palette.
-- `verify_npc.py` passed from a fresh boot over 40,213 frames, through repeated
-  conversations, the original robot fight, escape, landing, and playable dog
-  reunion in Prehistoria. The input recipe now aims in additional directions if
-  a robot survives the initial shots, instead of requiring an exact next hit.
-- The sprite-sheet preview and station conversation screenshots were visually
-  inspected. Reports record ROM/core hashes, input segments and screenshot hashes.
+Fresh-boot Snes9x checks verify four cowboy facings, separate palette buffers, the
+original professor, repeated conversations and progression through Prehistoria.
+`verify_editor.py` builds an isolated two-character fixture and checks native walking
+frames, east/west patrols, and dialogue pause/resume. Inputs and ROM/core hashes are
+recorded in the generated reports. Screenshots are inspected natively and at 4×
+nearest-neighbor scale. See `README.md` for commands and evidence directories.
 
-The tested ROM SHA-256 is
-`fa51ff6acae7091e641a8ad454764ade068349f03cc1ef2ccdda3ead0984395b`;
-the BPS is 67,399 bytes. The larger patch includes the relocated pointer bank.
-Use the generated manifest for current hashes after editing the artwork.
-
-This is a stationary NPC prototype. Custom walking/combat animations, a complete
-campaign, physical SNES hardware, other regions, other hacks, and old save-state
-compatibility have not been verified.
-
-Graphics format reference: [SoETilesViewer](https://github.com/black-sliver/SoETilesViewer),
-especially `characterdata.h`, `spriteinfo.h` and `spriteblock.h`. Runtime read and
-instruction traces were gathered with a separately instrumented Snes9x build in
-temporary storage. That debug core is not required to build or play the patch.
+The original source reference is [SoETilesViewer](https://github.com/black-sliver/SoETilesViewer),
+especially `characterdata.h`, `spriteinfo.h`, and `spriteblock.h`. Earlier native
+traces used a separately instrumented Snes9x build; it is not a build/play dependency.
+Full-campaign, arbitrary routes, physical hardware, other regions/hacks, and old
+save states remain unverified.

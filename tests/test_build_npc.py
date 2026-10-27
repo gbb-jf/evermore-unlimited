@@ -11,7 +11,7 @@ import zlib
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from build_npc import (HOOK, SOURCE_SHA256, SOURCE_SIZE, SPAWN_OFFSET,
                        TALK_OFFSET, TARGET_SIZE, TEXT_OFFSET, build_rom,
-                       create_bps, packed_script, packed_text, write_checked)
+                       create_bps, packed_script, packed_text, write_checked, compile_rom)
 from cowboy_graphics import (ANIMATION_HOOK, FIRST_BLOCK, FRAME_OFFSET,
                              PALETTE_BANK_HOOK, PALETTE_HOOK, PALETTE_OFFSET,
                              TILE_HOOKS, TILE_TABLE_OFFSET, TILES_OFFSET,
@@ -127,7 +127,9 @@ class LocalRomTests(unittest.TestCase):
         if not cls.path.is_file():
             raise unittest.SkipTest("Private source ROM not present")
         cls.source = cls.path.read_bytes()
-        cls.target = build_rom(cls.source)
+        from character_model import Store
+        cls.scene, cls.characters = Store().project()
+        cls.target, cls.layout = compile_rom(cls.source, cls.scene, cls.characters)
 
     def test_source_preserved_and_build_reproducible(self):
         self.assertEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(), SOURCE_SHA256)
@@ -142,14 +144,16 @@ class LocalRomTests(unittest.TestCase):
     def test_patch_reconstructs_exact_rom(self):
         patch = create_bps(self.source, self.target)
         self.assertEqual(apply_bps(self.source, patch), self.target)
-        self.assertLess(len(patch), 100_000)
+        self.assertLess(len(patch), 250_000)
 
     def test_only_expected_original_ranges_changed(self):
         allowed = set(range(0xFFDC, 0xFFE0)) | set(range(HOOK, HOOK + 4))
-        allowed |= set(range(0x129C3E, 0x129C41)) | set(range(0x11D006, 0x11D009))
+        allowed |= set(range(0x129C3E, 0x129C41))
         for offset, size in ((ANIMATION_HOOK, 4), (PALETTE_HOOK, 4), (PALETTE_BANK_HOOK, 5)):
             allowed.update(range(offset, offset + size))
         allowed.update(TILE_HOOKS)
+        allowed.update(range(0x1080D2, 0x1080D6))
+        allowed.update((0xCCCF8, 0xCCCFD, 0xCCCFE))
         changes = {i for i in range(SOURCE_SIZE) if self.source[i] != self.target[i]}
         self.assertTrue(changes <= allowed)
 
@@ -169,16 +173,27 @@ class LocalRomTests(unittest.TestCase):
 
     def test_relocated_table_preserves_all_original_entries(self):
         table = self.target[TILE_TABLE_OFFSET:TILE_TABLE_OFFSET + 0x10000]
-        first, end = FIRST_BLOCK * 3, (FIRST_BLOCK + 16) * 3
+        from character_model import Store
+        _, characters = Store().project()
+        frame_count = sum(len(clip) for document in characters.values()
+                          for animation in document['animations'].values() for clip in animation.values())
+        first, end = FIRST_BLOCK * 3, (FIRST_BLOCK + frame_count * 4) * 3
         original = self.source[0x2C0000:0x2D0000]
         self.assertEqual(table[:first], original[:first])
         self.assertEqual(table[end:], original[end:])
 
     def test_private_frames_decode_to_authored_pixels(self):
-        art, palette = load_art()
-        self.assertEqual(self.target[PALETTE_OFFSET:PALETTE_OFFSET + 32], palette)
-        for number, name in enumerate(FACING_ORDER):
-            at = FRAME_OFFSET + number * 26
+        from collections import Counter
+        from character_model import rgb_palette
+        for ident, palette_id in self.layout['palettes'].items():
+            palette = b''.join(struct.pack('<H', color) for color in rgb_palette(self.characters[ident]))
+            self.assertEqual(self.target[0x340000 + palette_id:0x340000 + palette_id + 32], palette)
+        seen = Counter()
+        for number, record in enumerate(self.layout['frames']):
+            key = record['character'], record['mode'], record['facing']
+            expected = self.characters[key[0]]['animations'][key[1]][key[2]][seen[key]]['pixels']
+            seen[key] += 1
+            at = record['offset']
             self.assertEqual(self.target[at:at + 2], bytes((4, 6)))
             rendered = [[0] * 32 for _ in range(32)]
             for chunk in range(4):
@@ -192,7 +207,7 @@ class LocalRomTests(unittest.TestCase):
                 pixels = decode_block(self.target[offset:offset + 128])
                 for row in range(16):
                     rendered[y + 32 + row][x + 16:x + 32] = pixels[row]
-            self.assertEqual(rendered, art[name])
+            self.assertEqual(rendered, [[0 if c == '.' else int(c, 16) for c in row] for row in expected])
 
 
 def decode_block(data):

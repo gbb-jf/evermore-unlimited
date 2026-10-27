@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evermore — Character Workshop</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark">E</span><div><strong>EVERMORE</strong><small>CHARACTER WORKSHOP</small></div></div>
+    <nav aria-label="Workspace"><button id="tab-character" class="tab active">Characters</button><button id="tab-scene" class="tab">Opening station</button></nav>
+    <div class="header-actions"><span id="save-status" class="status">Loading…</span><button id="help">Agent guide</button><button id="save">Save <kbd>⌘/Ctrl S</kbd></button><button id="build" class="primary">Save & build ROM</button><button id="play">Open Snes9x ↗</button></div>
+  </header>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <div id="conflict" hidden>Changed on disk. Your local edits are still here. <button id="reload-document">Reload from disk</button></div>
+  <div class="layout">
+    <aside class="library">
+      <div class="panel-heading"><h2>Character library</h2><span id="library-count" class="count">0</span></div>
+      <input id="search" type="search" aria-label="Search characters" placeholder="Find a character…">
+      <div class="library-actions"><button id="new-character">＋ New</button><button id="clone-character">Duplicate</button></div>
+      <div id="character-list" role="list" aria-label="Characters"></div>
+      <div class="library-bottom"><button id="import-json">Import JSON</button><button id="export-json">Export JSON</button><p>Shared files. Visual edits and agent edits use the same source.</p></div>
+    </aside>
+    <main id="character-workspace" class="workspace">
+      <div class="workspace-heading"><div><span class="eyebrow">SPRITE STUDIO</span><h1 id="character-title">Character</h1></div><div class="clip-switch"><label>Animation <select id="mode"><option value="idle">Idle</option><option value="walk">Walking</option></select></label><div id="directions" class="segmented" aria-label="Facing direction"></div></div></div>
+      <div class="toolbar" role="toolbar" aria-label="Pixel tools">
+        <div id="tools" class="tool-group"></div><span class="separator"></span><button id="undo" title="Undo (Ctrl/⌘ Z)">↶</button><button id="redo" title="Redo (Ctrl/⌘ Shift Z)">↷</button><button id="flip-x" title="Mirror selection or frame">Flip ↔</button><button id="flip-y" title="Flip selection or frame">Flip ↕</button>
+        <label class="check"><input id="grid" type="checkbox" checked> Grid</label><label class="check"><input id="onion" type="checkbox"> Onion</label>
+      </div>
+      <div class="canvas-area"><canvas id="pixel-canvas" width="512" height="512" tabindex="0" aria-label="32 by 32 pixel editor. Arrow keys move the cursor; Enter paints; Delete erases."></canvas></div>
+      <div class="canvas-footer"><span id="cursor-info">32 × 32 pixels · anchor 16, 32</span><label>Zoom <input id="zoom" type="range" min="6" max="22" value="16"><span id="zoom-value">16×</span></label><span>Indexed · 4bpp</span></div>
+      <section class="timeline"><div class="timeline-header"><div><button id="animate" aria-pressed="false">▶ Preview</button><label>Frame <input id="duration" type="number" min="1" max="120" value="12"> ticks</label><small>60 ticks = 1 second</small></div><div><button id="frame-left" title="Move frame earlier">←</button><button id="frame-right" title="Move frame later">→</button><button id="frame-add">＋ Blank</button><button id="frame-duplicate">Duplicate frame</button><button id="frame-delete">Delete</button></div></div><div id="frames" class="filmstrip" aria-label="Animation frames"></div></section>
+    </main>
+    <main id="scene-workspace" class="workspace" hidden>
+      <div class="workspace-heading"><div><span class="eyebrow">SCENE COMPOSER</span><h1>Opening station</h1></div><span id="scene-budget" class="chip"></span></div>
+      <div class="toolbar"><button id="add-npc" class="primary">＋ Add NPC</button><button id="remove-npc">Remove selected</button><button id="add-waypoint">＋ Place waypoint</button><label class="check"><input id="simulate" type="checkbox"> Simulate patrols</label><button id="capture">Capture ROM reference</button></div>
+      <div class="scene-stage"><canvas id="scene-canvas" width="768" height="576" tabindex="0" aria-label="Opening station scene. Drag NPCs or waypoints on the 8 pixel grid."></canvas></div>
+      <div class="scene-caption"><span id="scene-hint">Drag an NPC to place it. Patrols follow straight horizontal then vertical segments.</span><small>Reference image from your ROM · placement grid: 8 px · green area: supported floor</small></div>
+      <section class="scene-instances"><h2>In this scene</h2><div id="npc-list"></div></section>
+    </main>
+    <aside id="character-properties" class="properties">
+      <h2>Character details</h2><label>Display name<input id="character-name" maxlength="40"></label><label>Description<textarea id="description" rows="2"></textarea></label><small id="character-id" class="mono"></small>
+      <div class="section-heading"><h2>Palette</h2><span class="chip">16 colors</span></div><div id="palette" class="palette" aria-label="Palette colors"></div>
+      <div class="color-edit"><input id="color-picker" type="color" aria-label="Selected palette color"><label>Color <span id="color-index">1</span><input id="color-hex" maxlength="7" aria-label="Hex color"></label></div><small id="snes-color">SNES preview</small>
+      <div class="section-heading"><h2>At game size</h2><span class="chip">4 facings</span></div><div id="native-previews" class="native-previews"></div>
+      <p class="muted">The canvas shows the colors the SNES can display. The foot marker stays fixed between frames.</p>
+      <div class="section-heading"><h2>Sprite sheets</h2></div><button id="import-png">Import PNG into this clip</button><label class="check"><input id="nearest" type="checkbox"> Map unmatched colors to nearest</label><button id="export-png">Export current animation PNG</button><p class="muted">Four rows: N · E · S · W. Each cell is 32 × 32 pixels. Columns are animation frames.</p>
+    </aside>
+    <aside id="scene-properties" class="properties" hidden>
+      <h2>NPC instance</h2><label>Instance ID<input id="npc-id"></label><label>Character<select id="npc-character"></select></label><div class="two-fields"><label>X<input id="npc-x" type="number" step="8" min="400" max="592"></label><label>Y<input id="npc-y" type="number" step="8" min="248" max="320"></label></div><label>Initial facing<select id="npc-facing"><option value="north">North</option><option value="east">East</option><option value="south">South</option><option value="west">West</option></select></label><label>Dialogue<textarea id="npc-dialogue" rows="5" maxlength="1000"></textarea></label><small>The character's name appears above the dialogue. Text wraps into native game pages.</small>
+      <div class="section-heading"><h2>Movement</h2></div><label>Behavior<select id="movement"><option value="stationary">Stationary</option><option value="patrol">Waypoint patrol</option></select></label><div id="waypoints"></div><p class="muted">Patrols loop at 1 pixel per tick. Conversations pause the route and resume at the same waypoint. Place routes on visible floor and test in game.</p>
+      <div class="scene-history"><button id="scene-undo">↶ Undo scene</button><button id="scene-redo">↷ Redo</button></div>
+    </aside>
+  </div>
+  <footer class="app-footer"><span id="build-status">Original ROM stays untouched. Builds go to build/evermore-npc.sfc</span><span>LOCAL WORKSPACE <span class="online-dot">●</span></span></footer>
+  <dialog id="create-dialog"><form id="create-form"><span class="eyebrow">CHARACTER LIBRARY</span><h2 id="create-heading">New character</h2><label>Display name<input id="create-name" required maxlength="40"></label><label>Stable ID<input id="create-id" required pattern="[a-z][a-z0-9-]{0,47}"></label><p id="create-error" class="error" role="alert"></p><div class="dialog-actions"><button type="button" id="create-cancel">Cancel</button><button class="primary" type="submit">Create character</button></div></form></dialog>
+  <dialog id="help-dialog"><span class="eyebrow">ONE SOURCE OF TRUTH</span><h2>For artists and agents</h2><p>Use the canvas, or edit the same versioned JSON files with the CLI.</p><pre>python3 tools/characters.py --json list
+python3 tools/characters.py --json get cowboy
+python3 tools/characters.py clone cowboy ranger
+python3 tools/characters.py --json validate
+python3 tools/characters.py build</pre><p>Updates require the revision returned by <code>get</code>, so an agent cannot silently overwrite unsaved work from another session.</p><pre>python3 tools/characters.py update ranger \
+  --input ranger.json --revision &lt;revision&gt;</pre><p>Artwork: <code>assets/characters/</code><br>NPCs and routes: <code>assets/scenes/</code><br>Keyboard: B pencil · E eraser · G fill · I pick · M select<br>Ctrl/⌘ Z undo · Shift Z redo · C/V copy/paste · S save</p><p><a href="/api/schema/character" target="_blank">Character schema ↗</a> · <a href="/api/schema/scene" target="_blank">Scene schema ↗</a></p><button id="help-close" class="primary">Back to workshop</button></dialog>
+  <input type="file" id="json-file" accept="application/json,.json" hidden><input type="file" id="png-file" accept="image/png" hidden>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

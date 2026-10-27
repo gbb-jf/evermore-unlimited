@@ -85,7 +85,12 @@ def main():
             report["events"].append({"frames": 1, "buttons": [], "capture": screenshot.name})
             report["poses"].append({"facing": facing, "file": screenshot.name,
                                      "sha256": hashlib.sha256(screenshot.read_bytes()).hexdigest()})
-            run(1, "B")
+            for _ in range(64):
+                if not session.word(npc + 0x0E) & 0x8000:
+                    break
+                run(5, "B")
+                run(30)
+            check(not session.word(npc + 0x0E) & 0x8000, "Conversation did not close")
             run(60)
             check((session.word(npc + 0x1A), session.word(npc + 0x1C)) == (544, 288),
                   "Cowboy moved after conversation")

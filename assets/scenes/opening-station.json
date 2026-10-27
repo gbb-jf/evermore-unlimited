@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "opening-station",
+  "name": "Opening station",
+  "npcs": [
+    {
+      "id": "cowboy",
+      "character": "cowboy",
+      "dialogue": "Looks like the experiment worked!",
+      "position": {
+        "x": 544,
+        "y": 288
+      },
+      "facing": "south",
+      "movement": {
+        "mode": "stationary",
+        "waypoints": []
+      }
+    }
+  ]
+}

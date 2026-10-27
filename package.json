@@ -1,0 +1,11 @@
+{
+  "name": "evermore-character-workshop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 tools/characters.py serve",
+    "test:editor": "node --test tests/pixels.test.mjs",
+    "test:browser": "node tests/editor.browser.mjs"
+  },
+  "devDependencies": { "playwright": "1.64.1" }
+}

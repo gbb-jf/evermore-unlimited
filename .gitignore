@@ -7,3 +7,5 @@ __pycache__/
 *.smc
 *.srm
 *.state
+/assets/.editor.lock
+/node_modules/

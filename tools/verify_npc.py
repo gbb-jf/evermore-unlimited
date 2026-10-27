@@ -77,7 +77,13 @@ def main():
             run(1, "B")
             run(150)
             screenshot(f"02-dialogue-{i + 1}")
-            run(1, "B")
+            # User-authored dialogue can contain several native text pages.
+            for _ in range(64):
+                if not session.word(npc + 0x0E) & 0x8000:
+                    break
+                run(5, "B")
+                run(30)
+            check(not session.word(npc + 0x0E) & 0x8000, "Conversation did not return control")
             run(60)
             check((session.word(npc + 0x1A), session.word(npc + 0x1C)) == (544, 288),
                   "NPC wandered after talking")
@@ -96,19 +102,32 @@ def main():
         for _ in range(24):
             run(1, "B")
             run(70)
-        check(session.word(0x2865) == 1, "First robot did not die as expected")
+        # Do not depend on a particular projectile hitting a particular robot;
+        # graphics / scene changes can shift their positions at the shot frame.
         run(120, "Down")
         run(10, "B")
         run(90)
-        # Rendering hooks change CPU timing enough to shift enemy movement and
-        # projectile hits. Keep attacking with real input until the encounter
-        # completes, rather than assuming the next shot must hit the robot.
-        for direction in ("Left", "Down", "Right", "Up") * 5:
+        # Aim using observed positions: recoil can move the boy far from the
+        # surviving robot, so turning in place is not an encounter test.
+        for _ in range(240):
             if session.word(0x2865) == 2:
                 break
-            run(1, direction)
-            run(10, "B")
-            run(90)
+            robots = [session.word(address) for address in (0x2861, 0x2863)]
+            alive = [actor for actor in robots if session.word(actor + 0x2A) > 0]
+            if not alive:
+                run(10)
+                continue
+            actor = alive[0]
+            x, y = session.word(0x4EA3), session.word(0x4EA5)
+            target_x, target_y = session.word(actor + 0x1A), session.word(actor + 0x1C)
+            if abs(target_y - y) > 4:
+                run(min(12, max(1, abs(target_y - y) // 2)), "Down" if target_y > y else "Up")
+            elif abs(target_x - x) > 80:
+                run(min(12, max(1, (abs(target_x - x) - 60) // 2)), "Right" if target_x > x else "Left")
+            else:
+                run(1, "Right" if target_x > x else "Left")
+                run(6, "B")
+                run(60)
         check(session.word(0x2865) == 2, "Second robot did not trigger the escape cutscene")
         run(8910)
         check(not (session.ram[0x22EC] & 0x20), "Opening sequence did not finish")
