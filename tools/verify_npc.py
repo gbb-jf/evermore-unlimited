@@ -19,7 +19,9 @@ class SystemInfo(C.Structure):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--core", type=Path, default=Path("tools/vendor/snes9x_libretro.so"))
+    emulator = parser.add_mutually_exclusive_group()
+    emulator.add_argument("--core", type=Path, default=Path("tools/vendor/snes9x_libretro.so"))
+    emulator.add_argument("--luna", type=Path, help="Luna CLI executable (native stdio MCP backend)")
     parser.add_argument("--rom", type=Path, default=Path("build/evermore-npc.sfc"))
     parser.add_argument("--original", type=Path, default=Path("roms/original.sfc"))
     parser.add_argument("--output-dir", type=Path, default=Path("build/verification"))
@@ -27,23 +29,31 @@ def main():
     if args.rom.read_bytes() != build_rom(args.original.read_bytes()):
         parser.error("Patched ROM differs from the current build; rebuild before verification")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    session = Session(args.core, args.rom)
-    info = SystemInfo()
-    session.core.retro_get_system_info.argtypes = [C.POINTER(SystemInfo)]
-    session.core.retro_get_system_info(C.byref(info))
-    report = {"emulator": info.library_name.decode(), "version": info.library_version.decode(),
-              "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest(),
-              "rom_sha256": hashlib.sha256(args.rom.read_bytes()).hexdigest(),
-              "fresh_boot": True, "ram_writes": False, "events": [], "screenshots": []}
+    if args.luna:
+        from luna_session import Session as LunaSession
+        session = LunaSession(args.luna, args.rom)
+        report = {"emulator": session.info["name"], "version": session.info["version"],
+                  "executable_sha256": hashlib.sha256(args.luna.read_bytes()).hexdigest(),
+                  "backend": "stdio-mcp"}
+    else:
+        session = Session(args.core, args.rom)
+        info = SystemInfo()
+        session.core.retro_get_system_info.argtypes = [C.POINTER(SystemInfo)]
+        session.core.retro_get_system_info(C.byref(info))
+        report = {"emulator": info.library_name.decode(), "version": info.library_version.decode(),
+                  "core_sha256": hashlib.sha256(args.core.read_bytes()).hexdigest()}
+    report.update({"rom_sha256": hashlib.sha256(args.rom.read_bytes()).hexdigest(),
+                   "fresh_boot": True, "ram_writes": False,
+                   "events": [], "screenshots": []})
 
     def run(frames, *buttons):
         session.run(frames, *buttons)
-        report["events"].append({"frames": frames, "buttons": list(buttons)})
+        report["events"].append({"frames": frames, "buttons": list(buttons), "at_frame": session.frame})
 
     def screenshot(name):
         path = args.output_dir / (name + ".png")
         session.screenshot(path)
-        report["events"].append({"frames": 1, "buttons": [], "capture": path.name})
+        report["events"].append({"frames": 1, "buttons": [], "capture": path.name, "at_frame": session.frame})
         report["screenshots"].append({"file": path.name,
                                       "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
 

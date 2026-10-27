@@ -115,6 +115,15 @@ Evidence goes to `build/cowboy-facings/`, `build/verification/`, and
 `build/editor-runtime/`. Integrity tests independently decode tiles/BPS, check
 determinism/checksums, and preserve unrelated original ROM data.
 
+Luna is available as an alternative headless backend for the opening check:
+
+```sh
+python3 tools/verify_npc.py --luna tools/vendor/luna/target/release/luna \
+  --output-dir build/luna/verification
+```
+
+See [the Luna trial](docs/luna.md) for its pinned build and interface details.
+
 Build the pinned optional emulator (C/C++ compiler and Make required):
 
 ```sh
