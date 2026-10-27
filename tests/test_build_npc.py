@@ -12,6 +12,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from build_npc import (HOOK, SOURCE_SHA256, SOURCE_SIZE, SPAWN_OFFSET,
                        TALK_OFFSET, TARGET_SIZE, TEXT_OFFSET, build_rom,
                        create_bps, packed_script, packed_text, write_checked)
+from cowboy_graphics import (ANIMATION_HOOK, FIRST_BLOCK, FRAME_OFFSET,
+                             PALETTE_BANK_HOOK, PALETTE_HOOK, PALETTE_OFFSET,
+                             TILE_HOOKS, TILE_TABLE_OFFSET, TILES_OFFSET,
+                             FACING_ORDER, encode_block, load_art)
 
 
 def apply_bps(source, patch):
@@ -138,11 +142,14 @@ class LocalRomTests(unittest.TestCase):
     def test_patch_reconstructs_exact_rom(self):
         patch = create_bps(self.source, self.target)
         self.assertEqual(apply_bps(self.source, patch), self.target)
-        self.assertLess(len(patch), 1024)
+        self.assertLess(len(patch), 100_000)
 
     def test_only_expected_original_ranges_changed(self):
         allowed = set(range(0xFFDC, 0xFFE0)) | set(range(HOOK, HOOK + 4))
         allowed |= set(range(0x129C3E, 0x129C41)) | set(range(0x11D006, 0x11D009))
+        for offset, size in ((ANIMATION_HOOK, 4), (PALETTE_HOOK, 4), (PALETTE_BANK_HOOK, 5)):
+            allowed.update(range(offset, offset + size))
+        allowed.update(TILE_HOOKS)
         changes = {i for i in range(SOURCE_SIZE) if self.source[i] != self.target[i]}
         self.assertTrue(changes <= allowed)
 
@@ -152,6 +159,65 @@ class LocalRomTests(unittest.TestCase):
         for data in (changed, b"\0" * 512 + self.source):
             with self.assertRaises(ValueError):
                 build_rom(data)
+
+    def test_professor_and_original_graphics_are_preserved(self):
+        for begin, end in ((0xEC252, 0xEC29C), (0x45372, 0x453A2),
+                           (0x932E2, 0x9330A), (0xE587D, 0xE5930),
+                           (0x10BA6B, 0x10BA8B), (0x190000, HOOK),
+                           (HOOK + 4, 0x300000)):
+            self.assertEqual(self.target[begin:end], self.source[begin:end])
+
+    def test_relocated_table_preserves_all_original_entries(self):
+        table = self.target[TILE_TABLE_OFFSET:TILE_TABLE_OFFSET + 0x10000]
+        first, end = FIRST_BLOCK * 3, (FIRST_BLOCK + 16) * 3
+        original = self.source[0x2C0000:0x2D0000]
+        self.assertEqual(table[:first], original[:first])
+        self.assertEqual(table[end:], original[end:])
+
+    def test_private_frames_decode_to_authored_pixels(self):
+        art, palette = load_art()
+        self.assertEqual(self.target[PALETTE_OFFSET:PALETTE_OFFSET + 32], palette)
+        for number, name in enumerate(FACING_ORDER):
+            at = FRAME_OFFSET + number * 26
+            self.assertEqual(self.target[at:at + 2], bytes((4, 6)))
+            rendered = [[0] * 32 for _ in range(32)]
+            for chunk in range(4):
+                flag, x, y, block = struct.unpack_from('<BbbH', self.target, at + 6 + 5 * chunk)
+                self.assertEqual(flag, 0x11)
+                self.assertEqual(block, FIRST_BLOCK + number * 4 + chunk)
+                pointer = int.from_bytes(self.target[TILE_TABLE_OFFSET + block * 3:
+                                                     TILE_TABLE_OFFSET + block * 3 + 3], 'little')
+                offset = 0x190000 + pointer
+                self.assertGreaterEqual(offset, TILES_OFFSET)
+                pixels = decode_block(self.target[offset:offset + 128])
+                for row in range(16):
+                    rendered[y + 32 + row][x + 16:x + 32] = pixels[row]
+            self.assertEqual(rendered, art[name])
+
+
+def decode_block(data):
+    """Read standard SNES 4bpp planes, independently of the asset encoder."""
+    output = [[0] * 16 for _ in range(16)]
+    for tile in range(4):
+        for y in range(8):
+            planes = (data[tile * 32 + y * 2], data[tile * 32 + y * 2 + 1],
+                      data[tile * 32 + 16 + y * 2], data[tile * 32 + 17 + y * 2])
+            for x in range(8):
+                value = sum(((plane >> (7 - x)) & 1) << bit for bit, plane in enumerate(planes))
+                output[(tile // 2) * 8 + y][(tile % 2) * 8 + x] = value
+    return output
+
+
+class GraphicsTests(unittest.TestCase):
+    def test_bitplane_encoding(self):
+        pixels = [[(x + y) % 16 for x in range(16)] for y in range(16)]
+        self.assertEqual(decode_block(encode_block(pixels)), pixels)
+
+    def test_artwork_has_distinct_directional_frames(self):
+        art, palette = load_art()
+        self.assertEqual(len(palette), 32)
+        self.assertEqual(len({str(frame) for frame in art.values()}), 4)
+        self.assertTrue(all(0 in row for frame in art.values() for row in frame))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,9 @@
 # Opening-station NPC experiment
 
+The current v2 adds [independent cowboy graphics](cowboy-graphics.md). The script
+and text allocations below remain in use; the graphics notes list the added
+allocations, native hooks, and current verification results.
+
 ## Supported ROM and allocation
 
 Only the clean, unheadered USA revision 1.0 is supported. The builder validates
@@ -30,7 +34,7 @@ character is created for this opening sequence, not later station visits.
 ## Actor and conversation
 
 - Map `$46`: professor's laboratory and ship area, also used by the opening.
-- Existing sprite `$57`; spawn coordinates `(68, 36)` in eight-pixel units,
+- Existing actor template `$57`, with private cowboy graphics in v2; spawn coordinates `(68, 36)` in eight-pixel units,
   resulting in world position `(544, 288)`.
 - The actor is additional; existing characters and map objects are retained.
 - Creation disables ordinary wandering, faces the actor south, and assigns the
@@ -68,7 +72,7 @@ records; checksums cover the source ROM, target ROM, and patch.
 
 ## Verification and limits
 
-Verified on 2026-10-27: all 12 unit tests passed, and the complete fresh-boot
+For the original v1 professor-sprite prototype, verified on 2026-10-27: all 12 unit tests passed, and the complete fresh-boot
 Snes9x recipe passed across 40,112 emulated frames. The dialogue and final
 Prehistoria screenshots were also visually inspected. The tested output SHA-256
 is `399fedd132d277f22cb28d527fa6bc3d230607c96f54fcc02ddabdd96f94bd8d`;

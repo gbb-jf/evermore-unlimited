@@ -100,6 +100,15 @@ def main():
         run(120, "Down")
         run(10, "B")
         run(90)
+        # Rendering hooks change CPU timing enough to shift enemy movement and
+        # projectile hits. Keep attacking with real input until the encounter
+        # completes, rather than assuming the next shot must hit the robot.
+        for direction in ("Left", "Down", "Right", "Up") * 5:
+            if session.word(0x2865) == 2:
+                break
+            run(1, direction)
+            run(10, "B")
+            run(90)
         check(session.word(0x2865) == 2, "Second robot did not trigger the escape cutscene")
         run(8910)
         check(not (session.ram[0x22EC] & 0x20), "Opening sequence did not finish")

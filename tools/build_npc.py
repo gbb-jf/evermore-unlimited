@@ -8,6 +8,8 @@ from pathlib import Path
 import struct
 import zlib
 
+from cowboy_graphics import export_preview, install as install_cowboy
+
 
 SOURCE_SHA256 = "17c864a76d498feb6479eee8e7d6807b951c66225033228622bb66754baab1db"
 SOURCE_SIZE = 0x300000
@@ -70,8 +72,8 @@ def build_rom(source):
         "0c 93 04 b0 "  # Original clear of $22ea bit 3.
         "ba 57 44 24 "  # Existing professor sprite, tile coordinates (68, 36).
         "2a ad "        # Disable the sprite's ordinary wandering AI.
-        "75 ad "        # Face the last-created entity south.
         "3d ad aa 19 "  # Attach short talk script $19aa to that entity.
+        "75 ad "        # Face south after attaching the private graphics marker.
         "00"            # Return to the original script.
     )
     talk = bytes.fromhex(
@@ -88,6 +90,7 @@ def build_rom(source):
     text = b"\x96Looks like the\x0aexperiment worked!\x86\x00"
     for offset, data in [(SPAWN_OFFSET, spawn), (TALK_OFFSET, talk), (TEXT_OFFSET, text)]:
         write_checked(rom, offset, b"\xff" * len(data), data)
+    install_cowboy(rom, write_checked)
     # The original size field already declares the 4 MiB address space ($0c).
     if rom[0xFFD7] != 0x0C:
         raise ValueError("Unexpected ROM size field")
@@ -112,7 +115,7 @@ def bps_number(value):
 def create_bps(source, target):
     """Encode BPS with SourceRead, TargetRead, and RLE TargetCopy records."""
     patch = bytearray(b"BPS1")
-    metadata = b"Evermore Unlimited: opening station NPC experiment v1"
+    metadata = b"Evermore Unlimited: independent cowboy NPC v2"
     for value in (len(source), len(target), len(metadata)):
         patch.extend(bps_number(value))
     patch.extend(metadata)
@@ -166,19 +169,21 @@ def main():
             raise ValueError("Output must not overwrite the original ROM")
         patch = create_bps(source, target)
         manifest = {
-            "experiment": "opening-station-npc-v1",
+            "experiment": "opening-station-cowboy-v2",
             "source": {"region": "USA / NTSC", "revision": "1.0", "header_bytes": 0,
                        "size": len(source), "sha256": sha256(source)},
             "target": {"size": len(target), "sha256": sha256(target),
                        "snes_checksum": f"{int.from_bytes(target[0xFFDE:0xFFE0], 'little'):04X}"},
             "patch": {"format": "BPS", "size": len(patch), "sha256": sha256(patch)},
             "npc": {"map": "0x46", "sprite": "0x57", "position_tiles": [68, 36],
-                    "dialogue": DIALOGUE},
+                    "dialogue": DIALOGUE, "graphics": "independent cowboy",
+                    "artwork": "assets/cowboy.json"},
         }
         args.output_dir.mkdir(parents=True, exist_ok=True)
         output_rom.write_bytes(target)
         (args.output_dir / "evermore-npc.bps").write_bytes(patch)
         (args.output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        export_preview(args.output_dir)
         print(f"ROM:   {output_rom}\nPatch: {args.output_dir / 'evermore-npc.bps'}")
         print(f"SHA-256: {sha256(target)}")
     except (OSError, ValueError) as error:
