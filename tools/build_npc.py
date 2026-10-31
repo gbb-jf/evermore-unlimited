@@ -56,7 +56,7 @@ def write_checked(rom, offset, expected, replacement):
     rom[offset:offset + len(replacement)] = replacement
 
 
-def compile_rom(source, scene=None, characters=None):
+def compile_rom(source, scene=None, characters=None, *, gamemaster=False):
     if len(source) != SOURCE_SIZE or sha256(source) != SOURCE_SHA256:
         raise ValueError("Expected the clean, unheadered US Secret of Evermore ROM "
                          f"({SOURCE_SIZE} bytes, SHA-256 {SOURCE_SHA256}).")
@@ -64,6 +64,9 @@ def compile_rom(source, scene=None, characters=None):
         scene, characters = Store().project()
     rom = bytearray(source) + bytearray(b"\xff" * (TARGET_SIZE - len(source)))
     layout = install(rom, scene, characters, write_checked, packed_script, packed_text)
+    if gamemaster:
+        from gamemaster_rom import install as install_gamemaster
+        install_gamemaster(rom, source, layout, write_checked, packed_script, packed_text)
     rom[0xFFDC:0xFFE0] = bytes.fromhex("ff ff 00 00")
     checksum = sum(rom) & 0xFFFF
     struct.pack_into("<HH", rom, 0xFFDC, checksum ^ 0xFFFF, checksum)
@@ -130,7 +133,7 @@ def create_bps(source, target):
     return bytes(patch)
 
 
-def build_project(root=ROOT, output_dir=None, source_path=None):
+def build_project(root=ROOT, output_dir=None, source_path=None, *, gamemaster=False):
     from character_model import export_sheet
     root = Path(root).resolve()
     output_dir = Path(output_dir or root / "build").resolve()
@@ -140,10 +143,10 @@ def build_project(root=ROOT, output_dir=None, source_path=None):
         raise ValueError("Output must not overwrite the original ROM")
     scene, characters = Store(root).project()
     source = source_path.read_bytes()
-    target, layout = compile_rom(source, scene, characters)
+    target, layout = compile_rom(source, scene, characters, gamemaster=gamemaster)
     patch = create_bps(source, target)
     manifest = {
-        "experiment": "character-editor-v3",
+        "experiment": "opening-gamemaster-v1" if gamemaster else "character-editor-v3",
         "source": {"region": "USA / NTSC", "revision": "1.0", "header_bytes": 0,
                    "size": len(source), "sha256": sha256(source)},
         "target": {"size": len(target), "sha256": sha256(target),
@@ -167,9 +170,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rom", type=Path, default=Path("roms/original.sfc"))
     parser.add_argument("--output-dir", type=Path, default=Path("build"))
+    parser.add_argument("--gamemaster", action="store_true", help="Build the opening AI gamemaster experiment")
     args = parser.parse_args()
     try:
-        manifest = build_project(output_dir=args.output_dir, source_path=args.rom)
+        manifest = build_project(output_dir=args.output_dir, source_path=args.rom, gamemaster=args.gamemaster)
         print(f"ROM:   {args.output_dir / 'evermore-npc.sfc'}")
         print(f"Patch: {args.output_dir / 'evermore-npc.bps'}")
         print(f"SHA-256: {manifest['target']['sha256']}")

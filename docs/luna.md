@@ -99,7 +99,9 @@ tools/vendor/luna/target/release/luna-gui build/evermore-npc.sfc
 
 The editor's **Open Luna** button checks the vendor build first, then `luna-gui`
 on PATH. A desktop display is required. The headless CLI does not supply a
-desktop window; the GUI has not been built or tested in this environment.
+desktop window. The GUI was successfully built during the
+[gamemaster experiment](gamemaster.md); interactive desktop play remains untested
+in this environment.
 
 ## Scope
 

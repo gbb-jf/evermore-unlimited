@@ -7,6 +7,10 @@ write dialogue and patrols, and build a playable patch from your original ROM.
 The default scene still has one stationary cowboy saying **“Looks like the
 experiment worked!”** The larger adventure and expansion design remain open.
 
+An opt-in [station gamemaster experiment](docs/gamemaster.md) comments on your
+character name and lets you fight Thraxx, Salabog, or Magmar instead of the first
+robots. It supports local Ollama commentary with an offline fallback.
+
 ## Open the editor
 
 Requires Python 3.10+ and Pillow (`python3-pil` on Ubuntu, or `python3 -m pip

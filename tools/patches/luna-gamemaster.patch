@@ -1,0 +1,88 @@
+diff --git a/crates/luna-api/src/lib.rs b/crates/luna-api/src/lib.rs
+index 7c5710a..466da08 100644
+--- a/crates/luna-api/src/lib.rs
++++ b/crates/luna-api/src/lib.rs
+@@ -13,6 +13,8 @@
+ //! this Rust API: the crate is not published and its methods carry no
+ //! stability promise. See "Versioning" in `CONTRIBUTING.md`.
+ 
++mod evermore_gamemaster;
++
+ use std::path::Path;
+ 
+ /// DSP register-write trace event (issue #122), re-exported so the CLI
+@@ -1363,6 +1365,7 @@ impl Drop for QuietPanics {
+ /// The public emulator handle. Owns at most one cartridge + Snes
+ /// machine at a time.
+ pub struct Emulator {
++    evermore_gamemaster: Option<evermore_gamemaster::Bridge>,
+     snes: Option<Snes>,
+     rom_info: Option<RomInfo>,
+     instructions_executed: u64,
+@@ -1750,6 +1753,7 @@ impl Emulator {
+     #[must_use]
+     pub const fn new() -> Self {
+         Self {
++            evermore_gamemaster: None,
+             snes: None,
+             rom_info: None,
+             instructions_executed: 0,
+@@ -2026,6 +2030,7 @@ impl Emulator {
+         // refuse states produced against a different ROM. FNV-1a, not the
+         // std DefaultHasher: the algorithm must not drift across toolchains
+         // or a state written by one build is unreadable by the next.
++        let evermore_bridge = evermore_gamemaster::Bridge::for_rom(&cart.rom);
+         let rom_hash = fnv1a_64(&cart.rom);
+         let info = RomInfo {
+             title: cart.header.title.clone(),
+@@ -2073,6 +2078,7 @@ impl Emulator {
+         }));
+         match result {
+             Ok(Ok(snes)) => {
++                self.evermore_gamemaster = evermore_bridge;
+                 self.snes = Some(snes);
+                 self.bp_conditions.clear();
+                 self.pending_marks.clear();
+@@ -2096,6 +2102,7 @@ impl Emulator {
+     /// Reset the loaded emulator to its power-on state. Equivalent
+     /// to running the SNES reset vector. Errors if no ROM is loaded.
+     pub fn reset(&mut self) -> Result<(), ApiError> {
++        if let Some(bridge) = &mut self.evermore_gamemaster { bridge.reset(); }
+         let snes = self.snes.as_mut().ok_or(ApiError::NoRom)?;
+         // The access counters are the session's: a reset starts their counts
+         // again (Mesen2), it does not turn them off.
+@@ -2322,6 +2329,7 @@ impl Emulator {
+         if self.snes.is_none() {
+             return Err(ApiError::NoRom);
+         }
++        let bridge = &mut self.evermore_gamemaster;
+         let freezes = self.freezes.clone();
+         let mut cstack = self.call_stack.take();
+         let mut code_log = self
+@@ -2334,6 +2342,7 @@ impl Emulator {
+             debug.resume();
+         }
+         let mut last_frame = snes.frame_count;
++        let mut bridge_frame = snes.frame_count;
+         let mut executed = 0u64;
+         let mut stack_low = self.stack_low.clone();
+         let _quiet = QuietPanics::new();
+@@ -2384,6 +2393,10 @@ impl Emulator {
+                 if let (Some(log), Some(pre)) = (code_log.as_mut(), code_pre) {
+                     log.record(snes, pre);
+                 }
++                if snes.frame_count != bridge_frame {
++                    bridge_frame = snes.frame_count;
++                    if let Some(bridge) = bridge { bridge.poll(&mut snes.wram[..], snes.frame_count); }
++                }
+                 Self::apply_freezes_on_frame_edge(snes, &freezes, &mut last_frame);
+                 if let Some(stop) = after(snes) {
+                     return (Some(stop), false);
+@@ -3405,6 +3418,7 @@ impl Emulator {
+     /// [`ApiError::SaveState`] on a decode failure, a format-version
+     /// mismatch, or a ROM-hash mismatch.
+     pub fn load_state(&mut self, data: &[u8]) -> Result<(), ApiError> {
++        if let Some(bridge) = &mut self.evermore_gamemaster { bridge.reset(); }
+         if self.snes.is_none() {
+             return Err(ApiError::NoRom);
+         }
